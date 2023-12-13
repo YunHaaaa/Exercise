@@ -1,5 +1,3 @@
-import argparse
-import json
 import time
 from datetime import datetime
 import warnings
@@ -7,8 +5,6 @@ import os
 warnings.filterwarnings("ignore")
 
 from torch.autograd import Variable
-import torchvision
-import torchvision.transforms as transforms
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -25,50 +21,6 @@ import config
 from data import DataLoader
 
 
-# parser = argparse.ArgumentParser(description='Pharaphaser training')
-# parser.add_argument('--text', default='log.txt', type=str)
-# parser.add_argument('--exp_name', default='cifar10/FT', type=str)
-# parser.add_argument('--log_time', default='1', type=str)
-# parser.add_argument('--lr', default='0.1', type=float)
-# parser.add_argument('--resume_epoch', default='0', type=int)
-# parser.add_argument('--epoch', default='163', type=int)
-# parser.add_argument('--decay_epoch', default=[82, 123], nargs="*", type=int)
-# parser.add_argument('--w_decay', default='5e-4', type=float)
-# parser.add_argument('--cu_num', default='0', type=str)
-# parser.add_argument('--seed', default='1', type=str)
-# parser.add_argument('--load_pretrained_teacher', default='trained/Teacher.pth', type=str)
-# parser.add_argument('--load_pretrained_paraphraser', default='trained/Paraphraser.pth', type=str)
-# parser.add_argument('--save_model', default='ckpt.t7', type=str)
-# parser.add_argument('--rate', type=float, default=0.5, help='The paraphrase rate k')
-# parser.add_argument('--beta', type=int, default=500)
-
-
-# #Other parameters
-# DEVICE = torch.device("cuda")
-# RESUME_EPOCH = args.resume_epoch
-# DECAY_EPOCH = args.decay_epoch
-# DECAY_EPOCH = [ep - RESUME_EPOCH for ep in DECAY_EPOCH]
-# FINAL_EPOCH = args.epoch
-# EXPERIMENT_NAME = args.exp_name
-# RATE = args.rate
-# BETA = args.beta
-
-cudnn.deterministic = True
-cudnn.benchmark = False
-
-
-#### random Seed ####
-num = random.randint(1, 10000)
-random.seed(num)
-torch.manual_seed(num)
-#####################
-
-# Loss and Optimizer
-criterion_CE = nn.CrossEntropyLoss()
-criterion = nn.L1Loss()
-criterion_kl = KLLoss()
-
-
 class KLLoss(nn.Module):
     def __init__(self):
         super(KLLoss, self).__init__()
@@ -83,23 +35,36 @@ class KLLoss(nn.Module):
         target = Variable(target_data.data.cuda(),requires_grad=False)
         loss=T*T*((target*(target.log()-predict)).sum(1).sum()/target.size()[0])
         return loss
+    
 
+cudnn.deterministic = True
+cudnn.benchmark = False
+
+#### random Seed ####
+num = random.randint(1, 10000)
+random.seed(num)
+torch.manual_seed(num)
+#####################
+
+# Loss and Optimizer
+criterion_CE = nn.CrossEntropyLoss()
+criterion = nn.L1Loss()
+criterion_kl = KLLoss()
 
 def hyperparam():
     args = config.config()
     return args
 
 def main(args):
-
     global arch_name_teacher, arch_name_student
+
     if args.cuda and not torch.cuda.is_available():
         raise Exception('No GPU found, please run without --cuda')
-
+    
     os.environ['CUDA_VISIBLE_DEVICES'] = args.cu_num
 
     # set model name
     arch_name_teacher, arch_name_student = set_arch_name(args, kd=1)
-
     print('\n=> creating model \'{}\', \'{}\''.format(arch_name_teacher, arch_name_student))
     
     # Load pretrained models
@@ -119,7 +84,6 @@ def main(args):
 
     assert Teacher is not None, 'Unavailable Teacher model parameters!! exit...\n'
     assert Student is not None, 'Unavailable Student model parameters!! exit...\n'
-
 
 
     optimizer = optim.SGD(Student.parameters(), lr=args.lr if args.warmup_lr_epoch == 0 else args.warmup_lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
@@ -155,19 +119,10 @@ def main(args):
         int(elapsed_time//60), elapsed_time%60))
     print('===> Data loaded..')
 
-    arch_name_teacher, arch_name_student
-
     # load a pre-trained model
     if args.load is not None:
-        ckpt_file = pathlib.Path('checkpoint') / arch_name / args.dataset / args.load
-        assert isfile(ckpt_file), '==> no checkpoint found \"{}\"'.format(args.load)
-
-        print('==> Loading Checkpoint \'{}\''.format(args.load))
-        # check pruning or quantization or transfer
-        strict = False if args.prune else True
-        # load a checkpoint
-        checkpoint = load_model(model, ckpt_file, main_gpu=args.gpuids[0], use_cuda=args.cuda, strict=strict)
-        print('==> Loaded Checkpoint \'{}\''.format(args.load))
+        checkpoint_teacher = load_checkpoint(Teacher, arch_name_teacher, args)
+        checkpoint_student = load_checkpoint(Student, arch_name_student, args)
 
     # for training
     if args.run_type == 'train':
@@ -180,41 +135,63 @@ def main(args):
         validate_time = 0.0
 
         os.makedirs('./results', exist_ok=True)
-        file_train_acc = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name, args.dataset, args.save.split('.pth')[0]])))
-        file_test_acc = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name, args.dataset, args.save.split('.pth')[0]])))
+        file_train_acc_teacher = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_teacher, args.dataset, args.save.split('.pth')[0]])))
+        file_train_acc_student = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_student, args.dataset, args.save.split('.pth')[0]])))
+        file_test_acc_teacher = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_teacher, args.dataset, args.save.split('.pth')[0]])))
+        file_test_acc_student = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_student, args.dataset, args.save.split('.pth')[0]])))
 
         epochs = args.target_epoch + 75
         # for epoch in range(start_epoch, args.epochs):
         for epoch in range(start_epoch, epochs):
 
             print('\n==> {}/{} training'.format(
-                    arch_name, args.dataset))
+                    arch_name_student, args.dataset))
             print('==> Epoch: {}, lr = {}'.format(
                 epoch, optimizer.param_groups[0]["lr"]))
 
-            # train for one epoch
-            print('===> [ Training ]')
+            # train for one epoch for Teacher
+            print('===> [ Training for Teacher ]')
             start_time = time.time()
-            acc1_train, acc5_train = train(args, train_loader,
-                epoch=epoch, model=model,
-                criterion=criterion, optimizer=optimizer, scheduler=scheduler)
+            acc1_train_teacher, acc5_train_teacher = train(args, train_loader,
+                epoch=epoch, model=Teacher,
+                criterion=criterion, optimizer=optimizer_teacher, scheduler=scheduler_teacher)
 
             elapsed_time = time.time() - start_time
             train_time += elapsed_time
-            print('====> {:.2f} seconds to train this epoch\n'.format(
+            print('====> {:.2f} seconds to train for Teacher this epoch\n'.format(
                 elapsed_time))
 
-            # evaluate on validation set
-            print('===> [ Validation ]')
+            # train for one epoch for Student
+            print('===> [ Training for Student ]')
             start_time = time.time()
-            acc1_valid, acc5_valid = validate(args, val_loader,
-                epoch=epoch, model=model, criterion=criterion)
+            acc1_train_student, acc5_train_student = train(args, train_loader,
+                epoch=epoch, model=Student,
+                criterion=criterion, optimizer=optimizer_student, scheduler=scheduler_student)
+
+            elapsed_time = time.time() - start_time
+            train_time += elapsed_time
+            print('====> {:.2f} seconds to train for Student this epoch\n'.format(
+                elapsed_time))
+
+            # evaluate on validation set for Teacher
+            print('===> [ Validation for Teacher ]')
+            start_time = time.time()
+            acc1_valid_teacher, acc5_valid_teacher = validate(args, val_loader,
+                epoch=epoch, model=Teacher, criterion=criterion)
             elapsed_time = time.time() - start_time
             validate_time += elapsed_time
-            print('====> {:.2f} seconds to validate this epoch'.format(
+            print('====> {:.2f} seconds to validate for Teacher this epoch'.format(
                 elapsed_time))
 
-
+            # evaluate on validation set for Student
+            print('===> [ Validation for Student ]')
+            start_time = time.time()
+            acc1_valid_student, acc5_valid_student = validate(args, val_loader,
+                epoch=epoch, model=Student, criterion=criterion)
+            elapsed_time = time.time() - start_time
+            validate_time += elapsed_time
+            print('====> {:.2f} seconds to validate for Student this epoch'.format(
+                elapsed_time))
 
             tt1, tt = validate_t(args, val_loader,
                 epoch=epoch, model=model, criterion=criterion)
@@ -263,7 +240,7 @@ def main(args):
             int(total_train_time//3600), int((total_train_time%3600)//60), total_train_time%60))
 
         return best_acc1
-    
+
     elif args.run_type == 'evaluate':   # for evaluation
         # for evaluation on validation set
         print('\n===> [ Evaluation ]')
@@ -289,7 +266,6 @@ def main(args):
         return acc1
     else:
         assert False, 'Unkown --run-type! It should be \{train, evaluate\}.'
-    
 
 
 

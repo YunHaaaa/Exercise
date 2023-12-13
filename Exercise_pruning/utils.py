@@ -204,16 +204,31 @@ def accuracy(output, target, topk=(1,)):
         return res
 
 
-def set_arch_name(args):
-    r"""Set architecture name
-    """
-    arch_name = deepcopy(args.arch)
+def append_arch_details(base_arch_name, args):
     if args.arch in ['resnet']:
-        arch_name += str(args.layers)
+        return f"{base_arch_name}{args.layers}"
     elif args.arch in ['wideresnet']:
-        arch_name += '{}_{}'.format(args.layers, int(args.width_mult))
+        return f"{base_arch_name}{args.layers}_{int(args.width_mult)}"
+
+def set_arch_name(args, kd=0):
+    if kd:
+        student_arch_name = append_arch_details(deepcopy(args.arch_student), args)
+        teacher_arch_name = append_arch_details(deepcopy(args.arch_teacher), args)
+        return student_arch_name, teacher_arch_name
     
-    return arch_name
+    return append_arch_details(deepcopy(args.arch), args)
+
+def load_checkpoint(model, arch_name, args):
+    ckpt_file = pathlib.Path('checkpoint') / arch_name / args.dataset / args.load
+    assert isfile(ckpt_file), '==> no checkpoint found for {}: "{}"'.format(model.__name__, args.load)
+    print('==> Loading Checkpoint for {} \'{}\''.format(model.__name__, args.load))
+    # check pruning or quantization or transfer
+    strict = False if args.prune else True
+    # load a checkpoint
+    checkpoint = load_model(model, ckpt_file, main_gpu=args.gpuids[0], use_cuda=args.cuda, strict=strict)
+    print('==> Loaded Checkpoint for {} \'{}\''.format(model.__name__, args.load))
+
+    return checkpoint
 
 
 class GradualWarmupScheduler(object):

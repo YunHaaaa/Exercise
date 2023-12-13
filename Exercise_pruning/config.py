@@ -36,6 +36,19 @@ def config():
                         help='model architecture: ' +
                              ' | '.join(model_names) +
                              ' (default: resnet)')
+    
+    parser.add_argument('--arch-teacher', metavar='ARCH-TEACHER', default='resnet',
+                        choices=model_names,
+                        help='model architecture: ' +
+                             ' | '.join(model_names) +
+                             ' (default: resnet)')
+    
+    parser.add_argument('--arch-student', metavar='ARCH-STUDENT', default='resnet',
+                        choices=model_names,
+                        help='model architecture: ' +
+                             ' | '.join(model_names) +
+                             ' (default: resnet)')
+    
     parser.add_argument('--layers', default=56, type=int, metavar='N',
                         help='number of layers in ResNet (default: 56)')
     parser.add_argument('--width-mult', dest='width_mult', default=1.0, type=float, metavar='WM',
