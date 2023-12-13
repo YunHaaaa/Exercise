@@ -37,13 +37,7 @@ def config():
                              ' | '.join(model_names) +
                              ' (default: resnet)')
     
-    parser.add_argument('--arch-teacher', metavar='ARCH-TEACHER', default='resnet',
-                        choices=model_names,
-                        help='model architecture: ' +
-                             ' | '.join(model_names) +
-                             ' (default: resnet)')
-    
-    parser.add_argument('--arch-student', metavar='ARCH-STUDENT', default='resnet',
+    parser.add_argument('--arch-t', metavar='ARCH-TEACHER', default='resnet',
                         choices=model_names,
                         help='model architecture: ' +
                              ' | '.join(model_names) +

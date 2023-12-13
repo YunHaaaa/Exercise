@@ -56,27 +56,32 @@ def hyperparam():
     return args
 
 def main(args):
-    global arch_name_teacher, arch_name_student
-
+    global arch_name_t, arch_name
+    #Other parameters
+    RESUME_EPOCH = args.resume_epoch
+    DECAY_EPOCH = args.decay_epoch
+    DECAY_EPOCH = [ep - RESUME_EPOCH for ep in DECAY_EPOCH]
+    base_lr = args.lr
+    
     if args.cuda and not torch.cuda.is_available():
         raise Exception('No GPU found, please run without --cuda')
     
     os.environ['CUDA_VISIBLE_DEVICES'] = args.cu_num
 
     # set model name
-    arch_name_teacher, arch_name_student = set_arch_name(args, kd=1)
-    print('\n=> creating model \'{}\', \'{}\''.format(arch_name_teacher, arch_name_student))
+    arch_name_t, arch_name = set_arch_name(args, kd=1)
+    print('\n=> creating model \'{}\', \'{}\''.format(arch_name_t, arch_name))
     
     # Load pretrained models
     pruner = pruning.__dict__[args.pruner] # default : dcil
-    Teacher, image_size = pruning.models.__dict__[args.arch_teacher](data=args.dataset, num_layers=args.layers,
+    Teacher, image_size = pruning.models.__dict__[args.arch_t](data=args.dataset, num_layers=args.layers,
                                                 width_mult=args.width_mult,
                                                 depth_mult=args.depth_mult,
                                                 model_mult=args.model_mult,
                                                 mnn=pruner.mnn)
 
 
-    Student, image_size = pruning.models.__dict__[args.arch_student](data=args.dataset, num_layers=args.layers,
+    Student, image_size = pruning.models.__dict__[args.arch](data=args.dataset, num_layers=args.layers,
                                                 width_mult=args.width_mult,
                                                 depth_mult=args.depth_mult,
                                                 model_mult=args.model_mult,
@@ -121,8 +126,8 @@ def main(args):
 
     # load a pre-trained model
     if args.load is not None:
-        checkpoint_teacher = load_checkpoint(Teacher, arch_name_teacher, args)
-        checkpoint_student = load_checkpoint(Student, arch_name_student, args)
+        checkpoint_t = load_checkpoint(Teacher, arch_name_t, args)
+        checkpoint = load_checkpoint(Student, arch_name, args)
 
     # for training
     if args.run_type == 'train':
@@ -135,26 +140,26 @@ def main(args):
         validate_time = 0.0
 
         os.makedirs('./results', exist_ok=True)
-        file_train_acc_teacher = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_teacher, args.dataset, args.save.split('.pth')[0]])))
-        file_train_acc_student = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_student, args.dataset, args.save.split('.pth')[0]])))
-        file_test_acc_teacher = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_teacher, args.dataset, args.save.split('.pth')[0]])))
-        file_test_acc_student = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_student, args.dataset, args.save.split('.pth')[0]])))
+        file_train_acc_t = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_t, args.dataset, args.save.split('.pth')[0]])))
+        file_train_acc = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name, args.dataset, args.save.split('.pth')[0]])))
+        file_test_acc_t = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_t, args.dataset, args.save.split('.pth')[0]])))
+        file_test_acc = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name, args.dataset, args.save.split('.pth')[0]])))
 
         epochs = args.target_epoch + 75
         # for epoch in range(start_epoch, args.epochs):
         for epoch in range(start_epoch, epochs):
 
             print('\n==> {}/{} training'.format(
-                    arch_name_student, args.dataset))
+                    arch_name, args.dataset))
             print('==> Epoch: {}, lr = {}'.format(
                 epoch, optimizer.param_groups[0]["lr"]))
 
             # train for one epoch for Teacher
             print('===> [ Training for Teacher ]')
             start_time = time.time()
-            acc1_train_teacher, acc5_train_teacher = train(args, train_loader,
+            acc1_train_t, acc5_train_t = train(args, train_loader,
                 epoch=epoch, model=Teacher,
-                criterion=criterion, optimizer=optimizer_teacher, scheduler=scheduler_teacher)
+                criterion=criterion, optimizer=optimizer_t, scheduler=scheduler_t)
 
             elapsed_time = time.time() - start_time
             train_time += elapsed_time
@@ -164,9 +169,9 @@ def main(args):
             # train for one epoch for Student
             print('===> [ Training for Student ]')
             start_time = time.time()
-            acc1_train_student, acc5_train_student = train(args, train_loader,
+            acc1_train, acc5_train = train(args, train_loader,
                 epoch=epoch, model=Student,
-                criterion=criterion, optimizer=optimizer_student, scheduler=scheduler_student)
+                criterion=criterion, optimizer=optimizer, scheduler=scheduler)
 
             elapsed_time = time.time() - start_time
             train_time += elapsed_time
@@ -186,7 +191,7 @@ def main(args):
             # evaluate on validation set for Student
             print('===> [ Validation for Student ]')
             start_time = time.time()
-            acc1_valid_student, acc5_valid_student = validate(args, val_loader,
+            acc1_valid, acc5_valid = validate(args, val_loader,
                 epoch=epoch, model=Student, criterion=criterion)
             elapsed_time = time.time() - start_time
             validate_time += elapsed_time
@@ -194,7 +199,7 @@ def main(args):
                 elapsed_time))
 
             tt1, tt = validate_t(args, val_loader,
-                epoch=epoch, model=model, criterion=criterion)
+                epoch=epoch, model=Teacher, criterion=criterion)
 
             acc1_train = round(acc1_train.item(), 4)
             acc5_train = round(acc5_train.item(), 4)
@@ -203,6 +208,8 @@ def main(args):
 
             open(file_train_acc, 'a').write(str(acc1_train)+'\n')
             open(file_test_acc, 'a').write(str(acc1_valid)+'\n')
+            open(file_train_acc_t, 'a').write(str(acc1_train)+'\n')
+            open(file_test_acc_t, 'a').write(str(acc1_valid)+'\n')
 
             # remember best Acc@1 and save checkpoint and summary csv file
             state = model.state_dict()
@@ -284,7 +291,7 @@ def eval(net):
     criterion_CE = nn.CrossEntropyLoss()
 
     for batch_idx, (inputs, targets) in enumerate(loader):
-        inputs, targets = inputs.to(DEVICE), targets.to(DEVICE)
+        inputs, targets = inputs.cuda(), targets.cuda()
         outputs= net(inputs)
 
 
@@ -341,7 +348,7 @@ def train(teacher,student, epoch):
     global optimizer_t
 
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-        inputs, targets = inputs.to(DEVICE), targets.to(DEVICE)
+        inputs, targets = inputs.cuda(), targets.cuda()
         optimizer.zero_grad()
         optimizer_t.zero_grad()
 
