@@ -73,7 +73,7 @@ def main(args):
                                                 mnn=pruner.mnn)
 
 
-    Student, image_size = pruning.models.__dict__[args.arch_s](data=args.dataset, num_layers=args.layers,
+    Student, image_size = pruning.models.__dict__[args.arch_s](data=args.dataset, num_layers=args.layers_s,
                                                 width_mult=args.width_mult_s,
                                                 depth_mult=args.depth_mult_s,
                                                 model_mult=args.model_mult_s,
@@ -317,9 +317,6 @@ def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, *
     student.train()
     end = time.time()
 
-    train_loss = 0
-    correct = 0
-    total = 0    
     loader_len = len(train_loader)
 
     global optimizer
@@ -340,8 +337,8 @@ def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, *
         student_outputs = student(inputs, 3)
 
 
-        s_loss = criterion_CE(student_outputs[3], targets) + criterion_kl(student_outputs[3], teacher_outputs[3])
-        t_loss = criterion_CE(teacher_outputs[3], targets) + criterion_kl(teacher_outputs[3], student_outputs[3])
+        s_loss = criterion(student_outputs, targets) + criterion_kl(student_outputs[3], teacher_outputs[3])
+        t_loss = criterion(teacher_outputs, targets) + criterion_kl(teacher_outputs[3], student_outputs[3])
         loss = s_loss + t_loss
         ###################################################################################
 
@@ -368,12 +365,6 @@ def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, *
         # measure elapsed time
         batch_time.update(time.time() - end)
 
-        train_loss += loss.item()
-
-        _, predicted = torch.max(student_outputs[3].data, 1)
-        total += targets.size(0)
-
-        correct += predicted.eq(targets.data).cpu().sum().float().item()
 
         end = time.time()
 
