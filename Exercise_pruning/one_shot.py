@@ -150,6 +150,16 @@ def main(args):
         file_test_acc_t = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_t, args.dataset, args.save.split('.pth')[0]])))
         file_test_acc = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_s, args.dataset, args.save.split('.pth')[0]])))
 
+        # pruning
+        target_sparsity =  args.target_epoch
+
+        if args.prune_type == 'structured':
+            filter_mask = pruning.get_filter_mask(Teacher, target_sparsity, args)
+            pruning.filter_prune(Teacher, filter_mask)
+        elif args.prune_type == 'unstructured':
+            threshold = pruning.get_weight_threshold(Teacher, target_sparsity, args)
+            pruning.weight_prune(Teacher, threshold, args)
+
         epochs = args.target_epoch + 75
         # for epoch in range(start_epoch, args.epochs):
         for epoch in range(start_epoch, epochs):
@@ -159,28 +169,15 @@ def main(args):
             print('==> Epoch: {}, lr = {}'.format(
                 epoch, optimizer.param_groups[0]["lr"]))
 
-            # train for one epoch for Teacher
-            print('===> [ Training for Teacher ]')
+            # train 
+            print('===> [ Training ]')
             start_time = time.time()
-            acc1_train_t, acc5_train_t = train(args, train_loader,
-                epoch=epoch, model=Teacher,
-                criterion=criterion, optimizer=optimizer_t, scheduler=scheduler_t)
+            acc1_train_t, acc5_train_t, acc1_train, acc5_train = train(args, train_loader,
+                epoch=epoch, teacher=Teacher, student=Student, scheduler=scheduler_t)
 
             elapsed_time = time.time() - start_time
             train_time += elapsed_time
             print('====> {:.2f} seconds to train for Teacher this epoch\n'.format(
-                elapsed_time))
-
-            # train for one epoch for Student
-            print('===> [ Training for Student ]')
-            start_time = time.time()
-            acc1_train, acc5_train = train(args, train_loader,
-                epoch=epoch, model=Student,
-                criterion=criterion, optimizer=optimizer, scheduler=scheduler)
-
-            elapsed_time = time.time() - start_time
-            train_time += elapsed_time
-            print('====> {:.2f} seconds to train for Student this epoch\n'.format(
                 elapsed_time))
 
             # evaluate on validation set for Teacher
@@ -310,35 +307,65 @@ def main(args):
 
 
 
-def train(teacher,student, epoch):
-    epoch_start_time = time.time()
-    print('\n EPOCH: %d' % epoch)
+def train(args, train_loader, epoch, teacher, student, scheduler, **kwargs):
+    r"""Train model each epoch
+    """
+    batch_time = AverageMeter('Time', ':6.3f')
+    data_time = AverageMeter('Data', ':6.3f')
+    losses_t = AverageMeter('Loss', ':.4e')
+    losses = AverageMeter('Loss', ':.4e')
+    top1_t = AverageMeter('Acc@1', ':6.2f')
+    top5_t = AverageMeter('Acc@5', ':6.2f')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress_t = ProgressMeter(len(train_loader), batch_time, data_time,
+                             losses_t, top1_t, top5_t, prefix="Epoch: [{}]".format(epoch))
+    progress = ProgressMeter(len(train_loader), batch_time, data_time,
+                             losses, top1, top5, prefix="Epoch: [{}]".format(epoch))
 
     teacher.eval()
     student.train()
 
     train_loss = 0
     correct = 0
-    total = 0
+    total = 0    
+    loader_len = len(train_loader)
 
     global optimizer
     global optimizer_t
 
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+    for batch_idx, (inputs, targets) in enumerate(train_loader):
+        scheduler.step(globals()['iterations'] / loader_len)
+
         inputs, targets = inputs.cuda(), targets.cuda()
         optimizer.zero_grad()
         optimizer_t.zero_grad()
 
         # DML
         ###################################################################################
-        teacher_outputs= teacher(inputs)
-        student_outputs = student(inputs)
+        teacher_outputs= teacher(inputs, 3)
+        student_outputs = student(inputs, 3)
 
 
         s_loss = criterion_CE(student_outputs[3], targets) + criterion_kl(student_outputs[3], teacher_outputs[3])
         t_loss = criterion_CE(teacher_outputs[3], targets) + criterion_kl(teacher_outputs[3], student_outputs[3])
         loss = s_loss + t_loss
         ###################################################################################
+
+
+        # measure accuracy and record loss
+        acc1_t, acc5_t = accuracy(teacher_outputs, targets, topk=(1, 5))
+        acc1, acc5 = accuracy(student_outputs, targets, topk=(1, 5))
+        losses_t.update(t_loss.item(), input.size(0))
+        losses.update(s_loss.item(), input.size(0))
+        top1_t.update(acc1_t[0], input.size(0))
+        top5_t.update(acc5_t[0], input.size(0))
+        top1.update(acc1[0], input.size(0))
+        top5.update(acc5[0], input.size(0))
+
+        if batch_idx % args.print_freq == 0:
+            progress_t.print(batch_idx)
+            progress.print(batch_idx)
 
 
         loss.backward()
@@ -352,12 +379,12 @@ def train(teacher,student, epoch):
 
         correct += predicted.eq(targets.data).cpu().sum().float().item()
 
-
-        b_idx = batch_idx
-
-    print('Train s1 \t Time Taken: %.2f sec' % (time.time() - epoch_start_time))
-    print('Loss: %.3f | Acc net: %.3f%%|' % (train_loss / (b_idx + 1), 100. * correct / total))
-    return train_loss / (b_idx + 1), correct / total
+        print('====> Acc@1 {top1_t.avg:.3f} Acc@5 {top5_t.avg:.3f}'
+              .format(top1=top1_t, top5=top5_t))
+        print('====> Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
+              .format(top1=top1, top5=top5))
+        
+    return top1_t.avg, top5_t.avg, top1.avg, top5.avg
 
 
 
