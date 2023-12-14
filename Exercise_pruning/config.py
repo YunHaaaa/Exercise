@@ -30,19 +30,13 @@ def config():
                         help='dataset: ' +
                              ' | '.join(dataset_names) +
                              ' (default: cifar10)')     
+    
     # for model architecture
     parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet',
                         choices=model_names,
                         help='model architecture: ' +
                              ' | '.join(model_names) +
                              ' (default: resnet)')
-    
-    parser.add_argument('--arch-t', metavar='ARCH-TEACHER', default='resnet',
-                        choices=model_names,
-                        help='model architecture: ' +
-                             ' | '.join(model_names) +
-                             ' (default: resnet)')
-    
     parser.add_argument('--layers', default=56, type=int, metavar='N',
                         help='number of layers in ResNet (default: 56)')
     parser.add_argument('--width-mult', dest='width_mult', default=1.0, type=float, metavar='WM',
@@ -52,6 +46,44 @@ def config():
                          help='depth multiplier network (rexnet)')
     parser.add_argument('--model-mult', default=0, type=int,
                         help="e.g. efficient type (0 : b0, 1 : b1, 2 : b2 ...)")
+
+
+    parser.add_argument('--arch-s', metavar='ARCH-STUDENT', default='resnet',
+                        choices=model_names,
+                        help='student model architecture: ' +
+                             ' | '.join(model_names) +
+                             ' (default: resnet)')
+    parser.add_argument('--layers-s', default=20, type=int, metavar='N',
+                        help='number of layers in ResNet (default: 20)')
+    parser.add_argument('--width-mult-s', dest='width_mult', default=1.0, type=float, metavar='WM',
+                        help='width multiplier to thin a network '
+                             'uniformly at each layer (default: 1.0)')
+    parser.add_argument('--depth-mult-s', default=1.0, type=float, metavar='DM',
+                         help='depth multiplier network (rexnet)')
+    parser.add_argument('--model-mult-s', default=0, type=int,
+                        help="e.g. efficient type (0 : b0, 1 : b1, 2 : b2 ...)")
+    
+
+
+    parser.add_argument('--arch-t', metavar='ARCH-TEACHER', default='resnet',
+                        choices=model_names,
+                        help='teacher model architecture: ' +
+                             ' | '.join(model_names) +
+                             ' (default: resnet)')
+    parser.add_argument('--layers_t', default=56, type=int, metavar='N',
+                        help='number of layers in ResNet (default: 56)')
+    parser.add_argument('--width-mult_t', dest='width_mult', default=1.0, type=float, metavar='WM',
+                        help='width multiplier to thin a network '
+                             'uniformly at each layer (default: 1.0)')
+    parser.add_argument('--depth-mult_t', default=1.0, type=float, metavar='DM',
+                         help='depth multiplier network (rexnet)')
+    parser.add_argument('--model-mult_t', default=0, type=int,
+                        help="e.g. efficient type (0 : b0, 1 : b1, 2 : b2 ...)")
+    
+
+    parser.add_argument('--load_pretrained', default='trained/Teacher.pth', type=str)
+
+
     # for dataset
     parser.add_argument('--datapath', default='../data', type=str, metavar='PATH',
                         help='where you want to load/save your dataset? (default: ../data)')
@@ -95,20 +127,28 @@ def config():
                         help='multiplicative factor of learning rate decay (default: 0.1)')
     parser.add_argument('--print-freq', default=100, type=int,
                         metavar='N', help='print frequency (default: 100)')
+    
+
     # for gpu configuration
     parser.add_argument('-C', '--cuda', dest='cuda', action='store_true',
                         help='use cuda?')
     parser.add_argument('-g', '--gpuids', metavar='GPU', default=[0],
                         type=int, nargs='+',
                         help='GPU IDs for using (default: 0)')
+    
+
     # specify run type
     parser.add_argument('--run-type', default='train', type=str, metavar='TYPE',
                         help='type of run the main function e.g. train or evaluate (default: train)')
+    
+
     # for load and save
     parser.add_argument('--load', default=None, type=str, metavar='FILE.pth',
                         help='name of checkpoint for testing model (default: None)')
     parser.add_argument('--save', default='ckpt.pth', type=str, metavar='FILE.pth',
                         help='name of checkpoint for saving model (default: ckpt.pth)')
+    
+
     #############
     # for pruning
     parser.add_argument('-P', '--prune', dest='prune', action='store_true',

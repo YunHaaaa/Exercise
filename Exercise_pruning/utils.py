@@ -231,6 +231,28 @@ def load_checkpoint(model, arch_name, args):
     return checkpoint
 
 
+def load_pretrained(model, checkpoint):
+    m_keys = list(model.state_dict().keys())
+
+    if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+        c_keys = list(checkpoint['state_dict'].keys())
+        not_m_keys = [i for i in c_keys if i not in m_keys]
+        not_c_keys = [i for i in m_keys if i not in c_keys]
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
+
+    else:
+        c_keys = list(checkpoint.keys())
+        not_m_keys = [i for i in c_keys if i not in m_keys]
+        not_c_keys = [i for i in m_keys if i not in c_keys]
+        model.load_state_dict(checkpoint, strict=False)
+
+    print("--------------------------------------\n LOADING PRETRAINING \n")
+    print("Not in Model: ")
+    print(not_m_keys)
+    print("Not in Checkpoint")
+    print(not_c_keys)
+    print('\n\n')
+
 class GradualWarmupScheduler(object):
     """ Gradually warm-up(increasing) learning rate in optimizer.
     Proposed in 'Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour'.

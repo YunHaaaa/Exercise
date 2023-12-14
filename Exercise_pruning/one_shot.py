@@ -56,7 +56,7 @@ def hyperparam():
     return args
 
 def main(args):
-    global arch_name_t, arch_name
+    global arch_name_t, arch_name_s
     #Other parameters
     RESUME_EPOCH = args.resume_epoch
     DECAY_EPOCH = args.decay_epoch
@@ -69,28 +69,32 @@ def main(args):
     os.environ['CUDA_VISIBLE_DEVICES'] = args.cu_num
 
     # set model name
-    arch_name_t, arch_name = set_arch_name(args, kd=1)
-    print('\n=> creating model \'{}\', \'{}\''.format(arch_name_t, arch_name))
+    arch_name_t, arch_name_s = set_arch_name(args, kd=1)
+    print('\n=> creating model \'{}\', \'{}\''.format(arch_name_t, arch_name_s))
     
     # Load pretrained models
     pruner = pruning.__dict__[args.pruner] # default : dcil
-    Teacher, image_size = pruning.models.__dict__[args.arch_t](data=args.dataset, num_layers=args.layers,
-                                                width_mult=args.width_mult,
-                                                depth_mult=args.depth_mult,
-                                                model_mult=args.model_mult,
+    Teacher, image_size = pruning.models.__dict__[args.arch_t](data=args.dataset, num_layers=args.layers_t,
+                                                width_mult=args.width_mult_t,
+                                                depth_mult=args.depth_mult_t,
+                                                model_mult=args.model_mult_t,
                                                 mnn=pruner.mnn)
 
 
-    Student, image_size = pruning.models.__dict__[args.arch](data=args.dataset, num_layers=args.layers,
-                                                width_mult=args.width_mult,
-                                                depth_mult=args.depth_mult,
-                                                model_mult=args.model_mult,
+    Student, image_size = pruning.models.__dict__[args.arch_s](data=args.dataset, num_layers=args.layers,
+                                                width_mult=args.width_mult_s,
+                                                depth_mult=args.depth_mult_s,
+                                                model_mult=args.model_mult_s,
                                                 mnn=pruner.mnn)
 
     assert Teacher is not None, 'Unavailable Teacher model parameters!! exit...\n'
     assert Student is not None, 'Unavailable Student model parameters!! exit...\n'
 
-
+    if len(args.load_pretrained) > 2 :
+        path = args.load_pretrained
+        state = torch.load(path)
+        load_pretrained(Teacher, state)
+        
     optimizer = optim.SGD(Student.parameters(), lr=args.lr if args.warmup_lr_epoch == 0 else args.warmup_lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
     optimizer_t = optim.SGD(Teacher.parameters(), lr=args.lr if args.warmup_lr_epoch == 0 else args.warmup_lr, momentum=args.momentum, weight_decay=args.weight_deca, nesterov=args.nesterov)
 
@@ -127,7 +131,7 @@ def main(args):
     # load a pre-trained model
     if args.load is not None:
         checkpoint_t = load_checkpoint(Teacher, arch_name_t, args)
-        checkpoint = load_checkpoint(Student, arch_name, args)
+        checkpoint = load_checkpoint(Student, arch_name_s, args)
 
     # for training
     if args.run_type == 'train':
@@ -141,16 +145,16 @@ def main(args):
 
         os.makedirs('./results', exist_ok=True)
         file_train_acc_t = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_t, args.dataset, args.save.split('.pth')[0]])))
-        file_train_acc = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name, args.dataset, args.save.split('.pth')[0]])))
+        file_train_acc = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_s, args.dataset, args.save.split('.pth')[0]])))
         file_test_acc_t = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_t, args.dataset, args.save.split('.pth')[0]])))
-        file_test_acc = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name, args.dataset, args.save.split('.pth')[0]])))
+        file_test_acc = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_s, args.dataset, args.save.split('.pth')[0]])))
 
         epochs = args.target_epoch + 75
         # for epoch in range(start_epoch, args.epochs):
         for epoch in range(start_epoch, epochs):
 
             print('\n==> s : {}, t : {} / {} training'.format(
-                    arch_name, arch_name_t, args.dataset))
+                    arch_name_s, arch_name_t, args.dataset))
             print('==> Epoch: {}, lr = {}'.format(
                 epoch, optimizer.param_groups[0]["lr"]))
 
@@ -218,8 +222,8 @@ def main(args):
             is_best = acc1_valid > best_acc1
             best_acc1 = max(acc1_valid, best_acc1)
             if is_best:
-                save_model(arch_name, args.dataset, state, args.save)
-            save_summary(arch_name, args.dataset, args.save.split('.pth')[0], summary)
+                save_model(arch_name_s, args.dataset, state, args.save)
+            save_summary(arch_name_s, args.dataset, args.save.split('.pth')[0], summary)
 
             # for pruning
             if args.prune:
@@ -264,7 +268,7 @@ def main(args):
 
         # save the result
 
-        ckpt_name = '{}-{}-{}'.format(arch_name, args.dataset, args.load[:-4])
+        ckpt_name = '{}-{}-{}'.format(arch_name_s, args.dataset, args.load[:-4])
         save_eval([ckpt_name, acc1, acc5])
 
         if args.prune:
