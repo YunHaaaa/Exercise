@@ -70,18 +70,18 @@ def config():
                         help='teacher model architecture: ' +
                              ' | '.join(model_names) +
                              ' (default: resnet)')
-    parser.add_argument('--layers_t', default=56, type=int, metavar='N',
+    parser.add_argument('--layers-t', default=56, type=int, metavar='N',
                         help='number of layers in ResNet (default: 56)')
-    parser.add_argument('--width-mult_t', dest='width_mult', default=1.0, type=float, metavar='WM',
+    parser.add_argument('--width-mult-t', dest='width_mult', default=1.0, type=float, metavar='WM',
                         help='width multiplier to thin a network '
                              'uniformly at each layer (default: 1.0)')
-    parser.add_argument('--depth-mult_t', default=1.0, type=float, metavar='DM',
+    parser.add_argument('--depth-mult-t', default=1.0, type=float, metavar='DM',
                          help='depth multiplier network (rexnet)')
-    parser.add_argument('--model-mult_t', default=0, type=int,
+    parser.add_argument('--model-mult-t', default=0, type=int,
                         help="e.g. efficient type (0 : b0, 1 : b1, 2 : b2 ...)")
     
 
-    parser.add_argument('--load_pretrained', default='trained/Teacher.pth', type=str)
+    parser.add_argument('--load-pretrained', default='trained/Teacher.pth', type=str)
 
 
     # for dataset
