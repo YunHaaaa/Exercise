@@ -205,9 +205,9 @@ def accuracy(output, target, topk=(1,)):
 
 
 def append_arch_details(base_arch_name, args):
-    if args.arch in ['resnet']:
+    if base_arch_name in ['resnet']:
         return f"{base_arch_name}{args.layers}"
-    elif args.arch in ['wideresnet']:
+    elif base_arch_name in ['wideresnet']:
         return f"{base_arch_name}{args.layers}_{int(args.width_mult)}"
 
 def set_arch_name(args, kd=0):
