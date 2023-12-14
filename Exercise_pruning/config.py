@@ -55,7 +55,7 @@ def config():
                              ' (default: resnet)')
     parser.add_argument('--layers-s', default=20, type=int, metavar='N',
                         help='number of layers in ResNet (default: 20)')
-    parser.add_argument('--width-mult-s', dest='width_mult', default=1.0, type=float, metavar='WM',
+    parser.add_argument('--width-mult-s', default=1.0, type=float, metavar='WM',
                         help='width multiplier to thin a network '
                              'uniformly at each layer (default: 1.0)')
     parser.add_argument('--depth-mult-s', default=1.0, type=float, metavar='DM',
@@ -72,7 +72,7 @@ def config():
                              ' (default: resnet)')
     parser.add_argument('--layers-t', default=56, type=int, metavar='N',
                         help='number of layers in ResNet (default: 56)')
-    parser.add_argument('--width-mult-t', dest='width_mult', default=1.0, type=float, metavar='WM',
+    parser.add_argument('--width-mult-t', default=1.0, type=float, metavar='WM',
                         help='width multiplier to thin a network '
                              'uniformly at each layer (default: 1.0)')
     parser.add_argument('--depth-mult-t', default=1.0, type=float, metavar='DM',
