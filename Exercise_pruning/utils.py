@@ -212,8 +212,8 @@ def append_arch_details(base_arch_name, args):
 
 def set_arch_name(args, kd=0):
     if kd:
-        student_arch_name = append_arch_details(deepcopy(args.arch_student), args)
-        teacher_arch_name = append_arch_details(deepcopy(args.arch_teacher), args)
+        student_arch_name = append_arch_details(deepcopy(args.arch_s), args)
+        teacher_arch_name = append_arch_details(deepcopy(args.arch_t), args)
         return student_arch_name, teacher_arch_name
     
     return append_arch_details(deepcopy(args.arch), args)

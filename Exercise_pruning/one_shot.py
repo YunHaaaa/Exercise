@@ -54,11 +54,6 @@ def hyperparam():
 
 def main(args):
     global arch_name_t, arch_name_s
-    #Other parameters
-    RESUME_EPOCH = args.resume_epoch
-    DECAY_EPOCH = args.decay_epoch
-    DECAY_EPOCH = [ep - RESUME_EPOCH for ep in DECAY_EPOCH]
-    base_lr = args.lr
     
     if args.cuda and not torch.cuda.is_available():
         raise Exception('No GPU found, please run without --cuda')
