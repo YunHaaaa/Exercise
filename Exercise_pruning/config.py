@@ -32,20 +32,20 @@ def config():
                              ' (default: cifar10)')     
     
     # for model architecture
-    parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet',
-                        choices=model_names,
-                        help='model architecture: ' +
-                             ' | '.join(model_names) +
-                             ' (default: resnet)')
-    parser.add_argument('--layers', default=56, type=int, metavar='N',
-                        help='number of layers in ResNet (default: 56)')
-    parser.add_argument('--width-mult', dest='width_mult', default=1.0, type=float, metavar='WM',
-                        help='width multiplier to thin a network '
-                             'uniformly at each layer (default: 1.0)')
-    parser.add_argument('--depth-mult', default=1.0, type=float, metavar='DM',
-                         help='depth multiplier network (rexnet)')
-    parser.add_argument('--model-mult', default=0, type=int,
-                        help="e.g. efficient type (0 : b0, 1 : b1, 2 : b2 ...)")
+#     parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet',
+#                         choices=model_names,
+#                         help='model architecture: ' +
+#                              ' | '.join(model_names) +
+#                              ' (default: resnet)')
+#     parser.add_argument('--layers', default=56, type=int, metavar='N',
+#                         help='number of layers in ResNet (default: 56)')
+#     parser.add_argument('--width-mult', dest='width_mult', default=1.0, type=float, metavar='WM',
+#                         help='width multiplier to thin a network '
+#                              'uniformly at each layer (default: 1.0)')
+#     parser.add_argument('--depth-mult', default=1.0, type=float, metavar='DM',
+#                          help='depth multiplier network (rexnet)')
+#     parser.add_argument('--model-mult', default=0, type=int,
+#                         help="e.g. efficient type (0 : b0, 1 : b1, 2 : b2 ...)")
 
 
     parser.add_argument('--arch-s', metavar='ARCH-STUDENT', default='resnet',

@@ -1,5 +1,4 @@
 import time
-from datetime import datetime
 import warnings
 import os
 warnings.filterwarnings("ignore")
@@ -12,10 +11,8 @@ import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 
 import random
-from logger import SummaryLogger
 
 from utils import *
-import models
 import pruning
 import config
 from data import DataLoader
@@ -173,7 +170,7 @@ def main(args):
             print('===> [ Training ]')
             start_time = time.time()
             acc1_train_t, acc5_train_t, acc1_train, acc5_train = train(args, train_loader,
-                epoch=epoch, teacher=Teacher, student=Student, scheduler=scheduler_t)
+                epoch=epoch, teacher=Teacher, student=Student, scheduler=scheduler, scheduler_t=scheduler_t)
 
             elapsed_time = time.time() - start_time
             train_time += elapsed_time
@@ -305,7 +302,7 @@ def main(args):
 
 
 
-def train(args, train_loader, epoch, teacher, student, scheduler, **kwargs):
+def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, **kwargs):
     r"""Train model each epoch
     """
     batch_time = AverageMeter('Time', ':6.3f')
@@ -335,6 +332,7 @@ def train(args, train_loader, epoch, teacher, student, scheduler, **kwargs):
 
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         scheduler.step(globals()['iterations'] / loader_len)
+        scheduler_t.step(globals()['iterations'] / loader_len)
         data_time.update(time.time() - end)
 
         inputs, targets = inputs.cuda(), targets.cuda()
