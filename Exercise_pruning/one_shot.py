@@ -139,7 +139,8 @@ def main(args):
         start_epoch = 0
         global iterations
         iterations = 0
-        best_acc1 = 0.0
+        best_acc1 = 0.0        
+        best_acc1_t = 0.0
         train_time = 0.0
         validate_time = 0.0
 
@@ -185,7 +186,7 @@ def main(args):
             # evaluate on validation set for Teacher
             print('===> [ Validation for Teacher ]')
             start_time = time.time()
-            acc1_valid_teacher, acc5_valid_teacher = validate(args, val_loader,
+            acc1_valid_t, acc5_valid_t = validate(args, val_loader,
                 epoch=epoch, model=Teacher, criterion=criterion)
             elapsed_time = time.time() - start_time
             validate_time += elapsed_time
@@ -202,8 +203,10 @@ def main(args):
             print('====> {:.2f} seconds to validate for Student this epoch'.format(
                 elapsed_time))
 
-            tt1, tt = validate(args, val_loader,
-                epoch=epoch, model=Teacher, criterion=criterion)
+            acc1_train_t = round(acc1_train_t.item(), 4)
+            acc5_train_t = round(acc5_train_t.item(), 4)
+            acc1_valid_t = round(acc1_valid_t.item(), 4)
+            acc5_valid_t = round(acc5_valid_t.item(), 4)
 
             acc1_train = round(acc1_train.item(), 4)
             acc5_train = round(acc5_train.item(), 4)
@@ -216,9 +219,17 @@ def main(args):
             open(file_test_acc_t, 'a').write(str(acc1_valid)+'\n')
 
             # remember best Acc@1 and save checkpoint and summary csv file
-            state = model.state_dict()
+            state_t = Teacher.state_dict()
+            summary_t = [epoch, acc1_train_t, acc5_train_t, acc1_valid_t, acc5_valid_t]
+            state = Student.state_dict()
             summary = [epoch, acc1_train, acc5_train, acc1_valid, acc5_valid]
 
+            is_best_t = acc1_valid_t > best_acc1_t
+            best_acc1_t = max(acc1_valid_t, best_acc1_t)
+            if is_best_t:
+                save_model(arch_name_t, args.dataset, state_t, args.save)
+            save_summary(arch_name_t, args.dataset, args.save.split('.pth')[0], summary_t)
+            
             is_best = acc1_valid > best_acc1
             best_acc1 = max(acc1_valid, best_acc1)
             if is_best:
@@ -227,8 +238,10 @@ def main(args):
 
             # for pruning
             if args.prune:
-                num_total, num_zero, sparsity = pruning.cal_sparsity(model)
-                print('\n====> sparsity: {:.2f}% || num_zero/num_total: {}/{}'.format(sparsity, num_zero, num_total))
+                num_total, num_zero, sparsity = pruning.cal_sparsity(Teacher)
+                print('\n====> teacher sparsity: {:.2f}% || num_zero/num_total: {}/{}'.format(sparsity, num_zero, num_total))
+                num_total, num_zero, sparsity = pruning.cal_sparsity(Student)
+                print('\n====> student sparsity: {:.2f}% || num_zero/num_total: {}/{}'.format(sparsity, num_zero, num_total))
 
             # end of one epoch
             print()
@@ -250,67 +263,50 @@ def main(args):
         print('====> total training time: {}h {}m {:.2f}s'.format(
             int(total_train_time//3600), int((total_train_time%3600)//60), total_train_time%60))
 
-        return best_acc1
+        return best_acc1_t, best_acc1
 
     elif args.run_type == 'evaluate':   # for evaluation
-        # for evaluation on validation set
-        print('\n===> [ Evaluation ]')
-        
-        # main evaluation
+
+        # evaluate on validation set for Teacher
+        print('===> [ Validation for Teacher ]')
         start_time = time.time()
-        acc1, acc5 = validate(args, val_loader, None, model, criterion)
+        acc1_t, acc5_t = validate(args, val_loader,
+            epoch=epoch, model=Teacher, criterion=criterion)
         elapsed_time = time.time() - start_time
-        print('====> {:.2f} seconds to evaluate this model\n'.format(
+        validate_time += elapsed_time
+        print('====> {:.2f} seconds to validate for Teacher this epoch'.format(
             elapsed_time))
+
+        # evaluate on validation set for Student
+        print('===> [ Validation for Student ]')
+        start_time = time.time()
+        acc1, acc5 = validate(args, val_loader,
+            epoch=epoch, model=Student, criterion=criterion)
+        elapsed_time = time.time() - start_time
+        validate_time += elapsed_time
+        print('====> {:.2f} seconds to validate for Student this epoch'.format(
+            elapsed_time))
+
         
+        acc1_t = round(acc1_t.item(), 4)
+        acc5_t = round(acc5_t.item(), 4)
         acc1 = round(acc1.item(), 4)
         acc5 = round(acc5.item(), 4)
 
         # save the result
-
+        ckpt_name_t = '{}-{}-{}'.format(arch_name_t, args.dataset, args.load[:-4])
+        save_eval([ckpt_name_t, acc1_t, acc5_t])
         ckpt_name = '{}-{}-{}'.format(arch_name_s, args.dataset, args.load[:-4])
         save_eval([ckpt_name, acc1, acc5])
 
         if args.prune:
-            _,_,sparsity = pruning.cal_sparsity(model)
-            print('Sparsity : {}'.format(sparsity))
+            _,_,sparsity_t = pruning.cal_sparsity(Teacher)
+            _,_,sparsity = pruning.cal_sparsity(Student)
+            print('Teacher Sparsity : {}'.format(sparsity_t))
+            print('Student Sparsity : {}'.format(sparsity))
         return acc1
     else:
         assert False, 'Unkown --run-type! It should be \{train, evaluate\}.'
-
-
-
-def eval(net): # DML
-    loader = testloader
-    flag = 'Test'
-
-    epoch_start_time = time.time()
-    net.eval()
-    val_loss = 0
-
-    correct = 0
-
-
-    total = 0
-    criterion_CE = nn.CrossEntropyLoss()
-
-    for batch_idx, (inputs, targets) in enumerate(loader):
-        inputs, targets = inputs.cuda(), targets.cuda()
-        outputs= net(inputs)
-
-
-        loss = criterion_CE(outputs[3], targets)
-        val_loss += loss.item()
-
-        _, predicted = torch.max(outputs[3].data, 1)
-        total += targets.size(0)
-
-        correct += predicted.eq(targets.data).cpu().sum().float().item()
-        b_idx = batch_idx
-
-    print('%s \t Time Taken: %.2f sec' % (flag, time.time() - epoch_start_time))
-    print('Loss: %.3f | Acc net: %.3f%%' % (train_loss / (b_idx + 1), 100. * correct / total))
-    return val_loss / (b_idx + 1),  correct / total
 
 
 
@@ -362,6 +358,41 @@ def train(teacher,student, epoch):
     print('Train s1 \t Time Taken: %.2f sec' % (time.time() - epoch_start_time))
     print('Loss: %.3f | Acc net: %.3f%%|' % (train_loss / (b_idx + 1), 100. * correct / total))
     return train_loss / (b_idx + 1), correct / total
+
+
+
+def validate(net): # DML
+    loader = testloader
+    flag = 'Test'
+
+    epoch_start_time = time.time()
+    net.eval()
+    val_loss = 0
+
+    correct = 0
+
+
+    total = 0
+    criterion_CE = nn.CrossEntropyLoss()
+
+    for batch_idx, (inputs, targets) in enumerate(loader):
+        inputs, targets = inputs.cuda(), targets.cuda()
+        outputs= net(inputs)
+
+
+        loss = criterion_CE(outputs[3], targets)
+        val_loss += loss.item()
+
+        _, predicted = torch.max(outputs[3].data, 1)
+        total += targets.size(0)
+
+        correct += predicted.eq(targets.data).cpu().sum().float().item()
+        b_idx = batch_idx
+
+    print('%s \t Time Taken: %.2f sec' % (flag, time.time() - epoch_start_time))
+    print('Loss: %.3f | Acc net: %.3f%%' % (train_loss / (b_idx + 1), 100. * correct / total))
+    return val_loss / (b_idx + 1),  correct / total
+
 
 
 if __name__ == '__main__':
