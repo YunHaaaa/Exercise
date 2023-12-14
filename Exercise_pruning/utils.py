@@ -206,9 +206,9 @@ def accuracy(output, target, topk=(1,)):
 
 def append_arch_details(base_arch_name, args):
     if base_arch_name in ['resnet']:
-        return f"{base_arch_name}{args.layers}"
+        return f"{base_arch_name}{args.layers_s}" if 'layers_s' in args else f"{base_arch_name}{args.layers_t}"
     elif base_arch_name in ['wideresnet']:
-        return f"{base_arch_name}{args.layers}_{int(args.width_mult)}"
+        return f"{base_arch_name}{args.layers_s}_{int(args.width_mult)}" if 'layers_s' in args else f"{base_arch_name}{args.layers_t}_{int(args.width_mult)}"
 
 def set_arch_name(args, kd=0):
     if kd:
@@ -217,6 +217,7 @@ def set_arch_name(args, kd=0):
         return student_arch_name, teacher_arch_name
     
     return append_arch_details(deepcopy(args.arch), args)
+
 
 def load_checkpoint(model, arch_name, args):
     ckpt_file = pathlib.Path('checkpoint') / arch_name / args.dataset / args.load
