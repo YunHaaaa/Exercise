@@ -267,8 +267,7 @@ def main(args):
         # evaluate on validation set for Teacher
         print('===> [ Validation for Teacher ]')
         start_time = time.time()
-        acc1_t, acc5_t = validate(args, val_loader,
-            epoch=epoch, model=Teacher, criterion=criterion)
+        acc1_t, acc5_t = validate(args, val_loader, model=Teacher)
         elapsed_time = time.time() - start_time
         validate_time += elapsed_time
         print('====> {:.2f} seconds to validate for Teacher this epoch'.format(
@@ -277,8 +276,7 @@ def main(args):
         # evaluate on validation set for Student
         print('===> [ Validation for Student ]')
         start_time = time.time()
-        acc1, acc5 = validate(args, val_loader,
-            epoch=epoch, model=Student, criterion=criterion)
+        acc1, acc5 = validate(args, val_loader,model=Student)
         elapsed_time = time.time() - start_time
         validate_time += elapsed_time
         print('====> {:.2f} seconds to validate for Student this epoch'.format(
@@ -325,6 +323,7 @@ def train(args, train_loader, epoch, teacher, student, scheduler, **kwargs):
 
     teacher.eval()
     student.train()
+    end = time.time()
 
     train_loss = 0
     correct = 0
@@ -336,6 +335,7 @@ def train(args, train_loader, epoch, teacher, student, scheduler, **kwargs):
 
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         scheduler.step(globals()['iterations'] / loader_len)
+        data_time.update(time.time() - end)
 
         inputs, targets = inputs.cuda(), targets.cuda()
         optimizer.zero_grad()
@@ -372,12 +372,17 @@ def train(args, train_loader, epoch, teacher, student, scheduler, **kwargs):
         optimizer.step()
         optimizer_t.step()
 
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+
         train_loss += loss.item()
 
         _, predicted = torch.max(student_outputs[3].data, 1)
         total += targets.size(0)
 
         correct += predicted.eq(targets.data).cpu().sum().float().item()
+
+        end = time.time()
 
         print('====> Acc@1 {top1_t.avg:.3f} Acc@5 {top5_t.avg:.3f}'
               .format(top1=top1_t, top5=top5_t))
@@ -388,37 +393,48 @@ def train(args, train_loader, epoch, teacher, student, scheduler, **kwargs):
 
 
 
-def validate(net): # DML
-    loader = testloader
-    flag = 'Test'
+def validate(args, val_loader, model):
+    r"""Validate model each epoch and evaluation
+    """
+    batch_time = AverageMeter('Time', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(len(val_loader), batch_time, losses, top1, top5,
+                             prefix='Test: ')
 
-    epoch_start_time = time.time()
-    net.eval()
-    val_loss = 0
+    # switch to evaluate mode
+    model.eval()
 
-    correct = 0
-
-
-    total = 0
     criterion_CE = nn.CrossEntropyLoss()
 
-    for batch_idx, (inputs, targets) in enumerate(loader):
-        inputs, targets = inputs.cuda(), targets.cuda()
-        outputs= net(inputs)
+    with torch.no_grad():
+        end = time.time()
 
+        for batch_idx, (inputs, targets) in enumerate(val_loader):
+            inputs, targets = inputs.cuda(), targets.cuda()
 
-        loss = criterion_CE(outputs[3], targets)
-        val_loss += loss.item()
+            outputs= model(inputs, 3)
+            loss = criterion_CE(outputs[3], targets)
 
-        _, predicted = torch.max(outputs[3].data, 1)
-        total += targets.size(0)
+            # measure accuracy and record loss
+            acc1, acc5 = accuracy(outputs, targets, topk=(1, 5))
+            losses.update(loss.item(), input.size(0))
+            top1.update(acc1[0], input.size(0))
+            top5.update(acc5[0], input.size(0))
 
-        correct += predicted.eq(targets.data).cpu().sum().float().item()
-        b_idx = batch_idx
+            # measure elapsed time
+            batch_time.update(time.time() - end)
 
-    print('%s \t Time Taken: %.2f sec' % (flag, time.time() - epoch_start_time))
-    print('Loss: %.3f | Acc net: %.3f%%' % (train_loss / (b_idx + 1), 100. * correct / total))
-    return val_loss / (b_idx + 1),  correct / total
+            if batch_idx % args.print_freq == 0:
+                progress.print(batch_idx)
+
+            end = time.time()
+
+        print('====> Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
+              .format(top1=top1, top5=top5))
+
+    return top1.avg, top5.avg
 
 
 
