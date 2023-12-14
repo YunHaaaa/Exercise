@@ -149,8 +149,8 @@ def main(args):
         # for epoch in range(start_epoch, args.epochs):
         for epoch in range(start_epoch, epochs):
 
-            print('\n==> {}/{} training'.format(
-                    arch_name, args.dataset))
+            print('\n==> s : {}, t : {} / {} training'.format(
+                    arch_name, arch_name_t, args.dataset))
             print('==> Epoch: {}, lr = {}'.format(
                 epoch, optimizer.param_groups[0]["lr"]))
 
@@ -198,7 +198,7 @@ def main(args):
             print('====> {:.2f} seconds to validate for Student this epoch'.format(
                 elapsed_time))
 
-            tt1, tt = validate_t(args, val_loader,
+            tt1, tt = validate(args, val_loader,
                 epoch=epoch, model=Teacher, criterion=criterion)
 
             acc1_train = round(acc1_train.item(), 4)
@@ -276,7 +276,7 @@ def main(args):
 
 
 
-def eval(net):
+def eval(net): # DML
     loader = testloader
     flag = 'Test'
 
@@ -309,29 +309,6 @@ def eval(net):
     return val_loss / (b_idx + 1),  correct / total
 
 
-
-    for epoch in range(RESUME_EPOCH, FINAL_EPOCH+1):
-        f = open(os.path.join("logs/" + path, 'log.txt'), "a")
-
-        ### Train ###
-        train_loss, acc = train(Teacher,Student, epoch)
-        scheduler.step()
-        scheduler_t.step()
-
-        ### Evaluate  ###
-        val_loss, test_acc  = eval(Student)
-
-
-        f.write('EPOCH {epoch} \t'
-                'ACC_net : {acc_net:.4f} \t  \n'.format(epoch=epoch, acc_net=test_acc)
-                )
-        f.close()
-
-    utils.save_checkpoint({
-        'epoch': epoch,
-        'state_dict': Student.state_dict(),
-        'optimizer': optimizer.state_dict(),
-    }, True, 'ckpt/' + path, filename='Model_{}.pth'.format(epoch))
 
 def train(teacher,student, epoch):
     epoch_start_time = time.time()
