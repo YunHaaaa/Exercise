@@ -47,6 +47,7 @@ torch.manual_seed(num)
 
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.cu_num
+criterion = nn.L1Loss()
 
 
 #Data loader
@@ -89,7 +90,6 @@ model.to(DEVICE)
 # Loss and Optimizer
 optimizer = optim.SGD(model.parameters(), lr=base_lr, momentum=0.9, weight_decay=W_DECAY)
 scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=DECAY_EPOCH, gamma=0.1)
-criterion_CE = nn.CrossEntropyLoss()
 
 
 def eval(net):
@@ -104,17 +104,16 @@ def eval(net):
 
 
     total = 0
-    criterion_CE = nn.CrossEntropyLoss()
 
     for batch_idx, (inputs, targets) in enumerate(loader):
         inputs, targets = inputs.to(DEVICE), targets.to(DEVICE)
         outputs= net(inputs)
 
 
-        loss = criterion_CE(outputs[3], targets)
+        loss = criterion(outputs, targets)
         val_loss += loss.item()
 
-        _, predicted = torch.max(outputs[3].data, 1)
+        _, predicted = torch.max(outputs.data, 1)
 
 
         total += targets.size(0)
@@ -145,7 +144,7 @@ def train(model, epoch):
 
         ###################################################################################
         outputs= model(inputs)
-        loss = criterion_CE(outputs, targets)
+        loss = criterion(outputs, targets)
         ###################################################################################
         loss.backward()
         optimizer.step()

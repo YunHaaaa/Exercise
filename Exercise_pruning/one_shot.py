@@ -44,7 +44,6 @@ torch.manual_seed(num)
 #####################
 
 # Loss and Optimizer
-criterion_CE = nn.CrossEntropyLoss()
 criterion = nn.L1Loss()
 criterion_kl = KLLoss()
 
@@ -390,7 +389,6 @@ def validate(args, val_loader, model):
     # switch to evaluate mode
     model.eval()
 
-    criterion_CE = nn.CrossEntropyLoss()
 
     with torch.no_grad():
         end = time.time()
@@ -399,7 +397,7 @@ def validate(args, val_loader, model):
             inputs, targets = inputs.cuda(), targets.cuda()
 
             outputs= model(inputs, 3)
-            loss = criterion_CE(outputs[3], targets)
+            loss = criterion(outputs, targets)
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(outputs, targets, topk=(1, 5))
