@@ -44,7 +44,7 @@ torch.manual_seed(num)
 #####################
 
 # Loss and Optimizer
-criterion = nn.L1Loss()
+criterion = nn.CrossEntropyLoss()
 criterion_kl = KLLoss()
 
 def hyperparam():
@@ -52,7 +52,7 @@ def hyperparam():
     return args
 
 def main(args):
-    global arch_name_t, arch_name_s
+    global arch_name_t, arch_name_s, criterion
     
     if args.cuda and not torch.cuda.is_available():
         raise Exception('No GPU found, please run without --cuda')
@@ -60,7 +60,7 @@ def main(args):
     os.environ['CUDA_VISIBLE_DEVICES'] = args.cu_num
 
     # set model name
-    arch_name_t, arch_name_s = set_arch_name(args, kd=1)
+    arch_name_s, arch_name_t = set_arch_name(args, kd=1)
     print('\n=> creating model \'{}\', \'{}\''.format(arch_name_t, arch_name_s))
     
     # Load pretrained models
@@ -87,7 +87,7 @@ def main(args):
         load_pretrained(Teacher, state)
         
     optimizer = optim.SGD(Student.parameters(), lr=args.lr if args.warmup_lr_epoch == 0 else args.warmup_lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
-    optimizer_t = optim.SGD(Teacher.parameters(), lr=args.lr if args.warmup_lr_epoch == 0 else args.warmup_lr, momentum=args.momentum, weight_decay=args.weight_deca, nesterov=args.nesterov)
+    optimizer_t = optim.SGD(Teacher.parameters(), lr=args.lr if args.warmup_lr_epoch == 0 else args.warmup_lr, momentum=args.momentum, weight_decay=args.weight_decay, nesterov=args.nesterov)
 
     scheduler = set_scheduler(optimizer, args)
     scheduler_t = set_scheduler(optimizer_t, args)
@@ -98,10 +98,8 @@ def main(args):
         Teacher = Teacher.cuda()
         Student = Student.cuda()
         criterion = criterion.cuda()
-        Teacher = nn.DataParallel(Teacher, device_ids=args.gpuids,
-                                output_device=args.gpuids[0])
-        Student = nn.DataParallel(Student, device_ids=args.gpuids,
-                                output_device=args.gpuids[0])
+        Teacher = nn.DataParallel(Teacher)
+        Student = nn.DataParallel(Student)
         cudnn.benchmark = True
         
         # for distillation
@@ -119,10 +117,6 @@ def main(args):
         int(elapsed_time//60), elapsed_time%60))
     print('===> Data loaded..')
 
-    # load a pre-trained model
-    if args.load is not None:
-        checkpoint_t = load_checkpoint(Teacher, arch_name_t, args)
-        checkpoint = load_checkpoint(Student, arch_name_s, args)
 
     # for training
     if args.run_type == 'train':
@@ -130,19 +124,16 @@ def main(args):
         start_epoch = 0
         global iterations
         iterations = 0
-        best_acc1 = 0.0        
-        best_acc1_t = 0.0
+        best_acc1 = 0.0     
         train_time = 0.0
         validate_time = 0.0
 
         os.makedirs('./results', exist_ok=True)
-        file_train_acc_t = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_t, args.dataset, args.save.split('.pth')[0]])))
         file_train_acc = os.path.join('results', '{}.txt'.format('_'.join(['train', arch_name_s, args.dataset, args.save.split('.pth')[0]])))
-        file_test_acc_t = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_t, args.dataset, args.save.split('.pth')[0]])))
         file_test_acc = os.path.join('results', '{}.txt'.format('_'.join(['test', arch_name_s, args.dataset, args.save.split('.pth')[0]])))
 
         # pruning
-        target_sparsity =  args.target_epoch
+        target_sparsity =  args.prune_rate
 
         if args.prune_type == 'structured':
             filter_mask = pruning.get_filter_mask(Teacher, target_sparsity, args)
@@ -163,8 +154,9 @@ def main(args):
             # train 
             print('===> [ Training ]')
             start_time = time.time()
-            acc1_train_t, acc5_train_t, acc1_train, acc5_train = train(args, train_loader,
-                epoch=epoch, teacher=Teacher, student=Student, scheduler=scheduler, scheduler_t=scheduler_t)
+            acc1_train, acc5_train = train(args, train_loader,
+                epoch=epoch, teacher=Teacher, student=Student, scheduler=scheduler, scheduler_t=scheduler_t,
+                optimizer=optimizer, optimizer_t=optimizer_t)
 
             elapsed_time = time.time() - start_time
             train_time += elapsed_time
@@ -175,7 +167,7 @@ def main(args):
             print('===> [ Validation for Teacher ]')
             start_time = time.time()
             acc1_valid_t, acc5_valid_t = validate(args, val_loader,
-                epoch=epoch, model=Teacher, criterion=criterion)
+                 model=Teacher, criterion=criterion)
             elapsed_time = time.time() - start_time
             validate_time += elapsed_time
             print('====> {:.2f} seconds to validate for Teacher this epoch'.format(
@@ -185,14 +177,12 @@ def main(args):
             print('===> [ Validation for Student ]')
             start_time = time.time()
             acc1_valid, acc5_valid = validate(args, val_loader,
-                epoch=epoch, model=Student, criterion=criterion)
+                model=Student, criterion=criterion)
             elapsed_time = time.time() - start_time
             validate_time += elapsed_time
             print('====> {:.2f} seconds to validate for Student this epoch'.format(
                 elapsed_time))
 
-            acc1_train_t = round(acc1_train_t.item(), 4)
-            acc5_train_t = round(acc5_train_t.item(), 4)
             acc1_valid_t = round(acc1_valid_t.item(), 4)
             acc5_valid_t = round(acc5_valid_t.item(), 4)
 
@@ -203,20 +193,10 @@ def main(args):
 
             open(file_train_acc, 'a').write(str(acc1_train)+'\n')
             open(file_test_acc, 'a').write(str(acc1_valid)+'\n')
-            open(file_train_acc_t, 'a').write(str(acc1_train)+'\n')
-            open(file_test_acc_t, 'a').write(str(acc1_valid)+'\n')
 
             # remember best Acc@1 and save checkpoint and summary csv file
-            state_t = Teacher.state_dict()
-            summary_t = [epoch, acc1_train_t, acc5_train_t, acc1_valid_t, acc5_valid_t]
             state = Student.state_dict()
             summary = [epoch, acc1_train, acc5_train, acc1_valid, acc5_valid]
-
-            is_best_t = acc1_valid_t > best_acc1_t
-            best_acc1_t = max(acc1_valid_t, best_acc1_t)
-            if is_best_t:
-                save_model(arch_name_t, args.dataset, state_t, args.save)
-            save_summary(arch_name_t, args.dataset, args.save.split('.pth')[0], summary_t)
             
             is_best = acc1_valid > best_acc1
             best_acc1 = max(acc1_valid, best_acc1)
@@ -251,14 +231,14 @@ def main(args):
         print('====> total training time: {}h {}m {:.2f}s'.format(
             int(total_train_time//3600), int((total_train_time%3600)//60), total_train_time%60))
 
-        return best_acc1_t, best_acc1
+        return best_acc1
 
     elif args.run_type == 'evaluate':   # for evaluation
 
         # evaluate on validation set for Teacher
         print('===> [ Validation for Teacher ]')
         start_time = time.time()
-        acc1_t, acc5_t = validate(args, val_loader, model=Teacher)
+        acc1_t, acc5_t = validate(args, val_loader, model=Teacher, criterion=criterion)
         elapsed_time = time.time() - start_time
         validate_time += elapsed_time
         print('====> {:.2f} seconds to validate for Teacher this epoch'.format(
@@ -267,21 +247,17 @@ def main(args):
         # evaluate on validation set for Student
         print('===> [ Validation for Student ]')
         start_time = time.time()
-        acc1, acc5 = validate(args, val_loader,model=Student)
+        acc1, acc5 = validate(args, val_loader, model=Student, criterion=criterion)
         elapsed_time = time.time() - start_time
         validate_time += elapsed_time
         print('====> {:.2f} seconds to validate for Student this epoch'.format(
             elapsed_time))
 
         
-        acc1_t = round(acc1_t.item(), 4)
-        acc5_t = round(acc5_t.item(), 4)
         acc1 = round(acc1.item(), 4)
         acc5 = round(acc5.item(), 4)
 
         # save the result
-        ckpt_name_t = '{}-{}-{}'.format(arch_name_t, args.dataset, args.load[:-4])
-        save_eval([ckpt_name_t, acc1_t, acc5_t])
         ckpt_name = '{}-{}-{}'.format(arch_name_s, args.dataset, args.load[:-4])
         save_eval([ckpt_name, acc1, acc5])
 
@@ -296,19 +272,15 @@ def main(args):
 
 
 
-def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, **kwargs):
+def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, optimizer, optimizer_t, **kwargs):
     r"""Train model each epoch
     """
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses_t = AverageMeter('Loss', ':.4e')
     losses = AverageMeter('Loss', ':.4e')
-    top1_t = AverageMeter('Acc@1', ':6.2f')
-    top5_t = AverageMeter('Acc@5', ':6.2f')
     top1 = AverageMeter('Acc@1', ':6.2f')
     top5 = AverageMeter('Acc@5', ':6.2f')
-    progress_t = ProgressMeter(len(train_loader), batch_time, data_time,
-                             losses_t, top1_t, top5_t, prefix="Epoch: [{}]".format(epoch))
     progress = ProgressMeter(len(train_loader), batch_time, data_time,
                              losses, top1, top5, prefix="Epoch: [{}]".format(epoch))
 
@@ -317,9 +289,6 @@ def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, *
     end = time.time()
 
     loader_len = len(train_loader)
-
-    global optimizer
-    global optimizer_t
 
     for batch_idx, (inputs, targets) in enumerate(train_loader):
         scheduler.step(globals()['iterations'] / loader_len)
@@ -336,24 +305,20 @@ def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, *
         student_outputs = student(inputs, 3)
 
 
-        s_loss = criterion(student_outputs, targets) + criterion_kl(student_outputs[3], teacher_outputs[3])
-        t_loss = criterion(teacher_outputs, targets) + criterion_kl(teacher_outputs[3], student_outputs[3])
+        s_loss = criterion(student_outputs, targets) + criterion_kl(student_outputs, teacher_outputs)
+        t_loss = criterion(teacher_outputs, targets) + criterion_kl(teacher_outputs, student_outputs)
         loss = s_loss + t_loss
         ###################################################################################
 
 
         # measure accuracy and record loss
-        acc1_t, acc5_t = accuracy(teacher_outputs, targets, topk=(1, 5))
         acc1, acc5 = accuracy(student_outputs, targets, topk=(1, 5))
-        losses_t.update(t_loss.item(), input.size(0))
-        losses.update(s_loss.item(), input.size(0))
-        top1_t.update(acc1_t[0], input.size(0))
-        top5_t.update(acc5_t[0], input.size(0))
-        top1.update(acc1[0], input.size(0))
-        top5.update(acc5[0], input.size(0))
+        losses_t.update(t_loss.item(), inputs.size(0))
+        losses.update(s_loss.item(), inputs.size(0))
+        top1.update(acc1[0], inputs.size(0))
+        top5.update(acc5[0], inputs.size(0))
 
         if batch_idx % args.print_freq == 0:
-            progress_t.print(batch_idx)
             progress.print(batch_idx)
 
 
@@ -367,16 +332,15 @@ def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, *
 
         end = time.time()
 
-        print('====> Acc@1 {top1_t.avg:.3f} Acc@5 {top5_t.avg:.3f}'
-              .format(top1=top1_t, top5=top5_t))
+
         print('====> Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
               .format(top1=top1, top5=top5))
         
-    return top1_t.avg, top5_t.avg, top1.avg, top5.avg
+    return top1.avg, top5.avg
 
 
 
-def validate(args, val_loader, model):
+def validate(args, val_loader, model, criterion):
     r"""Validate model each epoch and evaluation
     """
     batch_time = AverageMeter('Time', ':6.3f')
@@ -401,9 +365,9 @@ def validate(args, val_loader, model):
 
             # measure accuracy and record loss
             acc1, acc5 = accuracy(outputs, targets, topk=(1, 5))
-            losses.update(loss.item(), input.size(0))
-            top1.update(acc1[0], input.size(0))
-            top5.update(acc5[0], input.size(0))
+            losses.update(loss.item(), inputs.size(0))
+            top1.update(acc1[0], inputs.size(0))
+            top5.update(acc5[0], inputs.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
