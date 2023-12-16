@@ -47,7 +47,7 @@ torch.manual_seed(num)
 
 
 os.environ['CUDA_VISIBLE_DEVICES'] = args.cu_num
-criterion = nn.L1Loss()
+criterion = nn.CrossEntropyLoss()
 
 
 #Data loader
@@ -86,10 +86,6 @@ model, image_size = resnet(data='cifar10', num_layers='56')
 
 
 model.to(DEVICE)
-
-sample_input = torch.randn(1, 3, 32, 32).to(DEVICE)
-sample_output = model(sample_input)
-print("모델 출력 크기:", sample_output.size())
 
 # Loss and Optimizer
 optimizer = optim.SGD(model.parameters(), lr=base_lr, momentum=0.9, weight_decay=W_DECAY)
@@ -143,19 +139,11 @@ def train(model, epoch):
         inputs, targets = inputs.to(DEVICE), targets.to(DEVICE)
         optimizer.zero_grad()
 
-        print("Batch", batch_idx)
-        print("Input size:", inputs.size())
-        print("Target size:", targets.size())
-
-
         ###################################################################################
         outputs= model(inputs)
-
-        print("Output size:", outputs.size())
-        print("Target size:", targets.size())
-
         loss = criterion(outputs, targets)
         ###################################################################################
+        
         loss.backward()
         optimizer.step()
 
