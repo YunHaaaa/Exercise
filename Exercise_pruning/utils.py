@@ -1,4 +1,5 @@
 import torch
+import os
 
 import csv
 import shutil
@@ -37,6 +38,12 @@ def load_model(model, ckpt_file, main_gpu, use_cuda: bool=True, strict=True):
 
     return checkpoint
 
+
+def save_checkpoint(state, is_best, path, filename='checkpoint.pth.tar'):
+    filename = os.path.join(path, filename)
+    torch.save(state, filename)
+    if is_best:
+        shutil.copyfile(filename, os.path.join(path,'model_best.pth.tar'))
 
 def save_model(arch_name, dataset, state, ckpt_name='ckpt_best.pth'):
     r"""Save the model (checkpoint) at the training time
@@ -204,17 +211,61 @@ def accuracy(output, target, topk=(1,)):
         return res
 
 
-def set_arch_name(args):
-    r"""Set architecture name
-    """
-    arch_name = deepcopy(args.arch)
-    if args.arch in ['resnet']:
-        arch_name += str(args.layers)
-    elif args.arch in ['wideresnet']:
-        arch_name += '{}_{}'.format(args.layers, int(args.width_mult))
+def append_arch_details(base_arch_name, args):
+    if base_arch_name in ['resnet']:
+        return f"{base_arch_name}{args.layers_s}"
+    elif base_arch_name in ['wideresnet']:
+        return f"{base_arch_name}{args.layers_s}_{int(args.width_mult)}"
     
-    return arch_name
+def append_arch_details_t(base_arch_name, args):
+    if base_arch_name in ['resnet']:
+        return f"{base_arch_name}{args.layers_t}"
+    elif base_arch_name in ['wideresnet']:
+        return f"{base_arch_name}{args.layers_t}_{int(args.width_mult)}"
+    
+def set_arch_name(args, kd=0):
+    if kd:
+        student_arch_name = append_arch_details(deepcopy(args.arch_s), args)
+        teacher_arch_name = append_arch_details_t(deepcopy(args.arch_t), args)
+        return student_arch_name, teacher_arch_name
+    
+    return append_arch_details(deepcopy(args.arch), args)
 
+
+def load_checkpoint(model, arch_name, args):
+    ckpt_file = pathlib.Path('checkpoint') / arch_name / args.dataset / args.load
+    assert isfile(ckpt_file), '==> no checkpoint found for {}: "{}"'.format(model.__name__, args.load)
+    print('==> Loading Checkpoint for {} \'{}\''.format(model.__name__, args.load))
+    # check pruning or quantization or transfer
+    strict = False if args.prune else True
+    # load a checkpoint
+    checkpoint = load_model(model, ckpt_file, main_gpu=args.gpuids[0], use_cuda=args.cuda, strict=strict)
+    print('==> Loaded Checkpoint for {} \'{}\''.format(model.__name__, args.load))
+
+    return checkpoint
+
+
+def load_pretrained(model, checkpoint):
+    m_keys = list(model.state_dict().keys())
+
+    if isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
+        c_keys = list(checkpoint['state_dict'].keys())
+        not_m_keys = [i for i in c_keys if i not in m_keys]
+        not_c_keys = [i for i in m_keys if i not in c_keys]
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
+
+    else:
+        c_keys = list(checkpoint.keys())
+        not_m_keys = [i for i in c_keys if i not in m_keys]
+        not_c_keys = [i for i in m_keys if i not in c_keys]
+        model.load_state_dict(checkpoint, strict=False)
+
+    print("--------------------------------------\n LOADING PRETRAINING \n")
+    print("Not in Model: ")
+    print(not_m_keys)
+    print("Not in Checkpoint")
+    print(not_c_keys)
+    print('\n\n')
 
 class GradualWarmupScheduler(object):
     """ Gradually warm-up(increasing) learning rate in optimizer.
