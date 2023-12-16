@@ -288,6 +288,7 @@ class ResNet_CIFAR(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        x = torch.nn.functional.softmax(x, dim=1) 
         return x
 
     def forward(self, x):
