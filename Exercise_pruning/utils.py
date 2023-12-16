@@ -1,4 +1,5 @@
 import torch
+import os
 
 import csv
 import shutil
@@ -37,6 +38,12 @@ def load_model(model, ckpt_file, main_gpu, use_cuda: bool=True, strict=True):
 
     return checkpoint
 
+
+def save_checkpoint(state, is_best, path, filename='checkpoint.pth.tar'):
+    filename = os.path.join(path, filename)
+    torch.save(state, filename)
+    if is_best:
+        shutil.copyfile(filename, os.path.join(path,'model_best.pth.tar'))
 
 def save_model(arch_name, dataset, state, ckpt_name='ckpt_best.pth'):
     r"""Save the model (checkpoint) at the training time
@@ -206,14 +213,20 @@ def accuracy(output, target, topk=(1,)):
 
 def append_arch_details(base_arch_name, args):
     if base_arch_name in ['resnet']:
-        return f"{base_arch_name}{args.layers_s}" if 'layers_s' in args else f"{base_arch_name}{args.layers_t}"
+        return f"{base_arch_name}{args.layers_s}"
     elif base_arch_name in ['wideresnet']:
-        return f"{base_arch_name}{args.layers_s}_{int(args.width_mult)}" if 'layers_s' in args else f"{base_arch_name}{args.layers_t}_{int(args.width_mult)}"
-
+        return f"{base_arch_name}{args.layers_s}_{int(args.width_mult)}"
+    
+def append_arch_details_t(base_arch_name, args):
+    if base_arch_name in ['resnet']:
+        return f"{base_arch_name}{args.layers_t}"
+    elif base_arch_name in ['wideresnet']:
+        return f"{base_arch_name}{args.layers_t}_{int(args.width_mult)}"
+    
 def set_arch_name(args, kd=0):
     if kd:
         student_arch_name = append_arch_details(deepcopy(args.arch_s), args)
-        teacher_arch_name = append_arch_details(deepcopy(args.arch_t), args)
+        teacher_arch_name = append_arch_details_t(deepcopy(args.arch_t), args)
         return student_arch_name, teacher_arch_name
     
     return append_arch_details(deepcopy(args.arch), args)
