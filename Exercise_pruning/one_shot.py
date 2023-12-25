@@ -301,8 +301,8 @@ def train(args, train_loader, epoch, teacher, student, scheduler, scheduler_t, o
 
         # DML
         ###################################################################################
-        teacher_outputs= teacher(inputs, 3)
-        student_outputs = student(inputs, 3)
+        teacher_outputs= teacher(inputs, 1) # 3
+        student_outputs = student(inputs, 4)
 
         s_loss = criterion(student_outputs, targets) + criterion_kl(student_outputs, teacher_outputs)
         t_loss = criterion(teacher_outputs, targets) + criterion_kl(teacher_outputs, student_outputs)
@@ -359,7 +359,7 @@ def validate(args, val_loader, model, criterion):
         for batch_idx, (inputs, targets) in enumerate(val_loader):
             inputs, targets = inputs.cuda(), targets.cuda()
 
-            outputs= model(inputs, 1)
+            outputs = model(inputs, 1)
             loss = criterion(outputs, targets)
 
             # measure accuracy and record loss
