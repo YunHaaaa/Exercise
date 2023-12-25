@@ -24,13 +24,13 @@ class BasicBlock(nn.Module):
     def __init__(self, inplanes, planes, stride=1, downsample_conv=None,downsample_p=None,downsample_f=None, groups=1,
                  base_width=64, dilation=1, norm_layer=None):
         super(BasicBlock, self).__init__()
+
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         if groups != 1 or base_width != 64:
             raise ValueError('BasicBlock only supports groups=1 and base_width=64')
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
-
 
         # 0 -> part use, 1-> full use
         self.type_value = 0
@@ -40,7 +40,6 @@ class BasicBlock(nn.Module):
         self.bn1_part = norm_layer(planes)
         self.bn1_full = norm_layer(planes)
         self.relu = nn.ReLU(inplace=True)
-
 
         self.conv2 = conv3x3(planes, planes)
         self.bn2_part = norm_layer(planes)
@@ -53,10 +52,8 @@ class BasicBlock(nn.Module):
         self.stride = stride
 
 
-
     def forward(self, x):
         identity = x
-
         out = self.conv1(x)
 
         # switch the bn
@@ -64,7 +61,6 @@ class BasicBlock(nn.Module):
             out = self.bn1_part(out)
         else:
             out = self.bn1_full(out)
-
 
         out = self.relu(out)
         out = self.conv2(out)
@@ -75,7 +71,6 @@ class BasicBlock(nn.Module):
         else:
             out = self.bn2_full(out)
 
-
         if self.downsample_conv is not None:
 
             if self.type_value == 0 or self.type_value == 2:
@@ -84,7 +79,6 @@ class BasicBlock(nn.Module):
             else:
                 temp = self.downsample_conv(x)
                 identity = self.downsample_f(temp)
-
 
         out += identity
         out = self.relu(out)
@@ -101,8 +95,6 @@ class Bottleneck(nn.Module):
         super(Bottleneck, self).__init__()
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-
-
 
         # 0 -> part use, 1-> full use
         self.type_value = 0
@@ -128,8 +120,8 @@ class Bottleneck(nn.Module):
         self.downsample_p = downsample_p
         self.downsample_f = downsample_f
 
-
         self.stride = stride
+
 
     def forward(self, x):
         identity = x
@@ -175,12 +167,14 @@ class Bottleneck(nn.Module):
         return out
 
 
+
 class ResNet(nn.Module):
     def __init__(self, block, layers, num_classes=1000, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None):
         super(ResNet, self).__init__()
         self.block_name = str(block.__name__)
+
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
@@ -198,12 +192,9 @@ class ResNet(nn.Module):
         self.base_width = width_per_group
         self.conv1 = mnn.MaskConv2d(3, self.inplanes, kernel_size=7, stride=2, padding=3,
                                     bias=False)
-
-
-
+        
         self.bn1_part = norm_layer(self.inplanes)
         self.bn1_full = norm_layer(self.inplanes)
-
 
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -215,8 +206,6 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2,
                                        dilate=replace_stride_with_dilation[2])
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-
-
 
         self.fc_part = nn.Linear(512 * block.expansion, num_classes)
         self.fc_full = nn.Linear(512 * block.expansion, num_classes)
@@ -239,9 +228,9 @@ class ResNet(nn.Module):
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)
 
+
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer = self._norm_layer
-
 
         downsample_conv = None
         downsample_p = None
@@ -256,9 +245,6 @@ class ResNet(nn.Module):
             downsample_p = norm_layer(planes * block.expansion)
             downsample_f = norm_layer(planes * block.expansion)
 
-
-
-
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample_conv,downsample_p,downsample_f, self.groups,
                             self.base_width, previous_dilation, norm_layer))
@@ -269,6 +255,7 @@ class ResNet(nn.Module):
                                 norm_layer=norm_layer))
 
         return nn.Sequential(*layers)
+
 
     def _forward_impl(self, x,type_value):
         # See note [TorchScript super()]
@@ -308,8 +295,11 @@ class ResNet(nn.Module):
 
         return x
 
+
     def forward(self, x,type_value):
         return self._forward_impl(x,type_value)
+
+
 
 class ResNet_CIFAR(nn.Module):
     def __init__(self, block, layers, num_classes=10, zero_init_residual=False,
@@ -318,11 +308,8 @@ class ResNet_CIFAR(nn.Module):
         super(ResNet_CIFAR, self).__init__()
         self.block_name = str(block.__name__)
 
-
-
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
-
 
         self._norm_layer = norm_layer
 
@@ -376,7 +363,6 @@ class ResNet_CIFAR(nn.Module):
     def _make_layer(self, block, planes, blocks, stride=1, dilate=False):
         norm_layer = self._norm_layer
 
-
         downsample_conv = None
         downsample_p = None
         downsample_f = None
@@ -403,16 +389,8 @@ class ResNet_CIFAR(nn.Module):
         return nn.Sequential(*layers)
 
 
-
-
-    # type value 0 -> pruned and update only important
-    # type value 0 -> pruned and update only important
-    # type value 0 -> pruned and update only important
-
-
     def _forward_impl(self, x, type_value):
         # See note [TorchScript super()]
-
         for m in self.modules():
             if isinstance(m, BasicBlock):
                 m.type_value = type_value
@@ -421,16 +399,12 @@ class ResNet_CIFAR(nn.Module):
             if isinstance(m, Bottleneck):
                 m.type_value = type_value
 
-
-
         x = self.conv1(x)
-
 
         if type_value == 0 or type_value == 2:
             x = self.bn1_part(x)
         else:
             x = self.bn1_full(x)
-
 
         x = self.relu(x)
 
@@ -441,7 +415,6 @@ class ResNet_CIFAR(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
 
-
         # type 7 is sharing the fc
         if type_value == 0 or type_value == 2 or type_value == 7:
             x = self.fc_part(x)
@@ -449,9 +422,10 @@ class ResNet_CIFAR(nn.Module):
             x = self.fc_full(x)
 
         return x
+    
 
     def forward(self, x,type_value):
-        return self._forward_impl(x,type_value)
+        return self._forward_impl(x, type_value)
 
 
 # Model configurations
