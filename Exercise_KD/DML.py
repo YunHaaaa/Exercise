@@ -124,11 +124,8 @@ criterion_kl = KLLoss()
 optimizer = optim.SGD(Student.parameters(), lr=base_lr, momentum=0.9, weight_decay=W_DECAY)
 optimizer_t = optim.SGD(Teacher.parameters(), lr=base_lr, momentum=0.9, weight_decay=W_DECAY)
 
-
-
 scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=DECAY_EPOCH, gamma=0.1)
 scheduler_t = optim.lr_scheduler.MultiStepLR(optimizer_t, milestones=DECAY_EPOCH, gamma=0.1)
-
 
 
 
@@ -163,6 +160,8 @@ def eval(net):
     print('%s \t Time Taken: %.2f sec' % (flag, time.time() - epoch_start_time))
     print('Loss: %.3f | Acc net: %.3f%%' % (train_loss / (b_idx + 1), 100. * correct / total))
     return val_loss / (b_idx + 1),  correct / total
+
+
 
 def train(teacher,module_t,student,module_s, epoch):
     epoch_start_time = time.time()

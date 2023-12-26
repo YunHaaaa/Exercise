@@ -75,6 +75,7 @@ class Masker_full_use(torch.autograd.Function):
 class MaskConv2d(nn.Conv2d):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                  padding=0, dilation=1, groups=1, bias=True, padding_mode='zeros'):
+        
         super(MaskConv2d, self).__init__(in_channels, out_channels, kernel_size, stride,
                                      padding, dilation, groups, bias, padding_mode)
         self.mask = nn.Parameter(torch.ones(self.weight.size()), requires_grad=False)
@@ -88,7 +89,6 @@ class MaskConv2d(nn.Conv2d):
             masked_weight = Masker_part.apply(self.weight, self.mask)
         elif self.type_value == 2:
             masked_weight = Masker.apply(self.weight, self.mask)
-
         elif self.type_value == 3:
             masked_weight = Masker_dis.apply(self.weight, self.mask)
         elif self.type_value == 4:

@@ -12,6 +12,8 @@ import torch.nn.functional as F
 
 from torch.autograd import Variable
 
+
+
 class BasicBlock(nn.Module):
     expansion = 1
 
@@ -36,13 +38,13 @@ class BasicBlock(nn.Module):
         out = F.relu(out)
         return out
 
+
+
 class Bottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, in_planes, planes, stride=1):
         super(Bottleneck, self).__init__()
-
-
 
         self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm2d(planes)
@@ -58,6 +60,7 @@ class Bottleneck(nn.Module):
                 nn.BatchNorm2d(self.expansion*planes)
             )
 
+
     def forward(self, x):
         out = F.relu(self.bn1(self.conv1(x)))
         out = F.relu(self.bn2(self.conv2(out)))
@@ -65,8 +68,11 @@ class Bottleneck(nn.Module):
         out += self.shortcut(x)
         out = F.relu(out)
         return out
+    
+
 
 class ResNet(nn.Module):
+
     def __init__(self, block, num_blocks, num_classes=10):
         super(ResNet, self).__init__()
         self.in_planes = 64
@@ -79,6 +85,8 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=2)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512*block.expansion, num_classes)
+
+
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
         layers = []
@@ -86,6 +94,7 @@ class ResNet(nn.Module):
             layers.append(block(self.in_planes, planes, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
+
 
         # 0 - layer1 ... 4 - output
     def forward(self, x):
@@ -105,7 +114,10 @@ class ResNet(nn.Module):
         attention_map.append(out)
         return attention_map
 
+
+
 class ResNet_simple(nn.Module):
+
     def __init__(self, block, num_blocks, num_classes=10):
         super(ResNet_simple, self).__init__()
         self.in_planes = 16
@@ -118,6 +130,8 @@ class ResNet_simple(nn.Module):
         self.layer3 = self._make_layer(block, 64, num_blocks[2], stride=2)
         #self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(64*block.expansion, num_classes)
+
+
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
         layers = []
@@ -125,6 +139,7 @@ class ResNet_simple(nn.Module):
             layers.append(block(self.in_planes, planes, stride))
             self.in_planes = planes * block.expansion
         return nn.Sequential(*layers)
+
 
         # 0 - layer1 ... 3 - output
     def forward(self, x):
@@ -141,6 +156,7 @@ class ResNet_simple(nn.Module):
         out = self.linear(out)
         attention_map.append(out)
         return attention_map
+
 
 
 def ResNet20():

@@ -83,8 +83,6 @@ base_lr = args.lr
 
 # Model
 model, image_size = resnet(data='cifar10', num_layers='56')
-
-
 model.to(DEVICE)
 
 # Loss and Optimizer
@@ -98,11 +96,9 @@ def eval(net):
 
     epoch_start_time = time.time()
     net.eval()
+
     val_loss = 0
-
     correct = 0
-
-
     total = 0
 
     for batch_idx, (inputs, targets) in enumerate(loader):
@@ -140,7 +136,7 @@ def train(model, epoch):
         optimizer.zero_grad()
 
         ###################################################################################
-        outputs= model(inputs)
+        outputs = model(inputs)
         loss = criterion(outputs, targets)
         ###################################################################################
         
